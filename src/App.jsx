@@ -10,10 +10,16 @@ const INITIAL_CENTER = [
 ]
 const INITIAL_ZOOM = 10.12
 
+const SEARCH_TYPES = {
+  CITY: 'city',
+  COUNTRY: 'country'
+}
+
 function App() {
   const mapRef = useRef()
   const mapContainerRef = useRef()
-  const [citySearch, setCitySearch] = useState('')
+  const [searchText, setSearchText] = useState('')
+  const [searchType, setSearchType] = useState(SEARCH_TYPES.CITY)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -49,18 +55,22 @@ function App() {
     })
   }
 
-  const handleCitySearch = async (e) => {
+  const handleSearch = async (e) => {
     e.preventDefault()
-    if (!citySearch.trim()) return
+    if (!searchText.trim()) return
 
     setLoading(true)
     setError('')
 
     try {
+      // Set different zoom levels and types based on search type
+      const types = searchType === SEARCH_TYPES.CITY ? 'place' : 'country'
+      const defaultZoom = searchType === SEARCH_TYPES.CITY ? 10 : 4
+
       const response = await fetch(
         `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
-          citySearch
-        )}.json?access_token=${mapboxgl.accessToken}&types=place`
+          searchText
+        )}.json?access_token=${mapboxgl.accessToken}&types=${types}`
       )
 
       if (!response.ok) throw new Error('Failed to fetch location')
@@ -68,21 +78,33 @@ function App() {
       const data = await response.json()
 
       if (data.features.length === 0) {
-        setError('City not found')
+        setError(`${searchType === SEARCH_TYPES.CITY ? 'City' : 'Country'} not found`)
         return
       }
 
       const [longitude, latitude] = data.features[0].center
+      const bounds = data.features[0].bbox
 
-      mapRef.current.flyTo({
-        center: [longitude, latitude],
-        zoom: 10,
-        essential: true
-      })
+      if (bounds && searchType === SEARCH_TYPES.COUNTRY) {
+        // If bbox is available, use it to fit the map to the country's bounds
+        mapRef.current.fitBounds([
+          [bounds[0], bounds[1]], // southwestern corner
+          [bounds[2], bounds[3]]  // northeastern corner
+        ], {
+          padding: 50
+        })
+      } else {
+        // If no bbox or searching for a city, just fly to the center point
+        mapRef.current.flyTo({
+          center: [longitude, latitude],
+          zoom: defaultZoom,
+          essential: true
+        })
+      }
 
-      setCitySearch('')
+      setSearchText('')
     } catch (err) {
-      setError('Error searching for city')
+      setError('Error performing search')
       console.error('Search error:', err)
     } finally {
       setLoading(false)
@@ -95,12 +117,20 @@ function App() {
         Longitude: {center[0].toFixed(4)} | Latitude: {center[1].toFixed(4)} | Zoom: {zoom.toFixed(2)}
       </div>
       <div className="search-container">
-        <form onSubmit={handleCitySearch}>
+        <form onSubmit={handleSearch}>
+          <select 
+            value={searchType} 
+            onChange={(e) => setSearchType(e.target.value)}
+            className="search-type-select"
+          >
+            <option value={SEARCH_TYPES.CITY}>City</option>
+            <option value={SEARCH_TYPES.COUNTRY}>Country</option>
+          </select>
           <input
             type="text"
-            value={citySearch}
-            onChange={(e) => setCitySearch(e.target.value)}
-            placeholder="Enter city name"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            placeholder={`Enter ${searchType} name`}
             disabled={loading}
           />
           <button type="submit" disabled={loading}>

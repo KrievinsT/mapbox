@@ -50,11 +50,16 @@
   gap: 8px;
 }
 
-.search-container input {
+.search-container input,
+.search-container .search-type-select {
   padding: 4px 8px;
   border: 1px solid #ccc;
   border-radius: 4px;
   font-size: 14px;
+}
+
+.search-type-select {
+  background-color: white;
 }
 
 .search-container button {
